@@ -1,4 +1,4 @@
-// Load env
+// Load environment variables from .env file
 require('dotenv').config();
 
 const express = require('express');
@@ -12,18 +12,27 @@ const PORT = process.env.PORT || 3000;
 // --- IMPORTANT: Configure your frontend's live URL here ---
 // This is used for CORS and Stripe redirect URLs.
 // You MUST set this as an environment variable on Render for your backend service.
+// Example: const YOUR_LIVE_WEBSITE_URL = 'https://your-frontend-domain.com';
 const YOUR_LIVE_WEBSITE_URL = process.env.YOUR_LIVE_WEBSITE_URL || 'http://localhost:8080'; // Default for local testing
 
-// --- In-memory "Database" for User Pro Status ---
-// In a real application, you would replace this with a proper persistent database
-// (e.g., PostgreSQL, MongoDB, etc.) connected to your Render service.
-// This simple object will store user IDs and their Pro status across server restarts
-// if you were using a persistent DB. For now, it's in-memory and will reset on server restart.
+// =============================================================
+// !!! CRITICAL: PERSISTENT DATABASE INTEGRATION REQUIRED !!!
+// The 'usersDb' below is an IN-MEMORY object for demonstration.
+// Data stored here WILL BE LOST on server restarts.
+// You MUST replace the 'usersDb' interactions with calls to your
+// actual persistent database (e.g., PostgreSQL, MongoDB, etc.).
+// =============================================================
+// Placeholder for a real database client (e.g., 'pg' for PostgreSQL, 'mongoose' for MongoDB)
+// const { Pool } = require('pg'); // Example for PostgreSQL
+// const pool = new Pool({
+//   connectionString: process.env.DATABASE_URL, // Set DATABASE_URL env var on Render
+// });
+
+// Example in-memory "database" - REPLACE THIS WITH YOUR REAL DB
 const usersDb = {}; // { 'user_session_id_123': { isPro: true } }
 
 // --- Middleware ---
 // Configure CORS to allow requests from your frontend domain.
-// Replace 'YOUR_LIVE_WEBSITE_URL' with the actual domain where your frontend is hosted (e.g., from Cloudflare).
 app.use(cors({
   origin: YOUR_LIVE_WEBSITE_URL, // Allow requests from your frontend
   credentials: true, // Allow cookies to be sent with requests (if you implement session management)
@@ -39,31 +48,39 @@ app.get('/', (req, res) => {
 });
 
 /**
- * NEW: Endpoint to check a user's Pro status.
- * The frontend will call this on load to determine access.
+ * Endpoint to check a user's Pro status from the PERSISTENT DATABASE.
+ * The frontend calls this on load to determine access.
  */
-app.get('/user-status', (req, res) => {
-  // --- User Identification ---
-  // The frontend sends an 'X-User-Id' header. In a real app, this would be
-  // a secure session ID or authenticated user ID.
-  const userId = req.headers['x-user-id'] || 'anonymous_user'; // Fallback if header is missing
+app.get('/user-status', async (req, res) => {
+  // The frontend sends an 'X-User-Id' header for anonymous user identification.
+  // In a real app with login, this would be a secure session ID or authenticated user ID.
+  const userId = req.headers['x-user-id'] || 'anonymous_user';
 
-  const user = usersDb[userId];
-  const isPro = user ? user.isPro : false;
+  try {
+    // <--- IMPORTANT: REPLACE THIS with logic to fetch user's Pro status from your REAL DB
+    // Example for PostgreSQL:
+    // const result = await pool.query('SELECT is_pro FROM users WHERE id = $1', [userId]);
+    // const isPro = result.rows.length > 0 ? result.rows[0].is_pro : false;
 
-  console.log(`User ${userId} requested status: isPro = ${isPro}`);
-  res.json({ isPro: isPro });
+    // Currently using in-memory fallback:
+    const user = usersDb[userId];
+    const isPro = user ? user.isPro : false;
+
+    console.log(`User ${userId} requested status: isPro = ${isPro}`);
+    res.json({ isPro: isPro });
+  } catch (error) {
+    console.error(`Error fetching user status for ${userId}:`, error);
+    res.status(500).json({ error: "Internal server error during status fetch." });
+  }
 });
 
-
 /**
- * MODIFIED: Creates a Stripe Checkout Session dynamically.
- * This replaces the hardcoded payment link.
+ * Creates a Stripe Checkout Session dynamically.
+ * This replaces any hardcoded payment links.
  */
 app.post('/checkout', async (req, res) => {
-  // --- User Identification ---
   // Get the user ID from the frontend. This is crucial for linking the purchase.
-  const userId = req.headers['x-user-id'] || 'anonymous_user'; // Fallback if header is missing
+  const userId = req.headers['x-user-id'] || 'anonymous_user';
 
   try {
     const session = await stripe.checkout.sessions.create({
@@ -97,10 +114,11 @@ app.post('/checkout', async (req, res) => {
 });
 
 /**
- * MODIFIED: Verifies purchase and updates user's Pro status persistently.
+ * Verifies purchase and updates user's Pro status in the PERSISTENT DATABASE.
  * This endpoint is called by the frontend after Stripe redirect.
- * In a production setup, you would also configure a Stripe Webhook to call this
- * (or a separate webhook handler) to ensure robust payment confirmation.
+ * In a robust production setup, you would also configure a Stripe Webhook to call this
+ * (or a separate webhook handler) to ensure payment confirmation even if the user
+ * closes their browser before redirect.
  */
 app.post('/verify-purchase', async (req, res) => {
   const { sessionId } = req.body;
@@ -115,11 +133,13 @@ app.post('/verify-purchase', async (req, res) => {
     if (session.payment_status === 'paid') {
       const userId = session.metadata.userId; // Retrieve user ID from metadata
       
-      // --- IMPORTANT: Update User's Pro Status in Your PERSISTENT Database ---
-      // For this example, we're using an in-memory object.
-      // REPLACE THIS LINE with your actual database update logic:
+      // <--- IMPORTANT: REPLACE THIS with logic to save/update user's Pro status in your REAL DB
+      // Example for PostgreSQL:
+      // await pool.query('INSERT INTO users (id, is_pro) VALUES ($1, TRUE) ON CONFLICT (id) DO UPDATE SET is_pro = TRUE', [userId]);
+
+      // Currently using in-memory fallback:
       usersDb[userId] = { isPro: true }; 
-      console.log(`User ${userId} is now Pro! Status updated in DB (in-memory).`);
+      console.log(`User ${userId} is now Pro! Status updated in DB (in-memory fallback).`);
 
       return res.json({ success: true, isPro: true, message: 'Payment verified.' });
     } else {
@@ -132,4 +152,4 @@ app.post('/verify-purchase', async (req, res) => {
 });
 
 // Start the server
-app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`Backend server listening on http://localhost:${PORT}`));
