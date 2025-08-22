@@ -10,7 +10,7 @@
   <style>
     :root{ --bg:#0D1117; --glow1:#22D3EE; --glow2:#A78BFA; --accent:#0EA5E9; --text:#E5E7EB; --muted:#9CA3AF; --border:rgba(255,255,255,0.1);}  
     body{ font-family:"Inter",system-ui,Arial,Helvetica,sans-serif; background:radial-gradient(80vw 80vw at 10% 0%, rgba(34,211,238,.08), transparent 60%), radial-gradient(80vw 80vw at 90% 0%, rgba(167,139,250,.08), transparent 60%), linear-gradient(to bottom right,#0b0f14,#0D1117); color:var(--text);} 
-    .pane{ background:rgba(17,24,39,.6); border:1px solid var(--border); border-radius:1rem; backdrop-filter:blur(18px); box-shadow:0 20px 60px rgba(0,0,0,.45);} 
+    .pane{ background:rgba(17,24,39,.6); border:1px solid var(--border); border-radius:1rem; backdrop-filter:blur(18px); box-shadow:0 20px 60px rgba(0,0,0,.45);}  
     .fret{ stroke:#6B7280; stroke-width:1.5px; } .string{ stroke:#4B5563; stroke-width:2px; } .inlay{ fill:#4B5563; }
     .n{ cursor:pointer; transition:opacity .15s ease, transform .1s ease, fill .2s ease, stroke .2s ease; }
     .n-root{ fill:var(--glow2); stroke:#C4B5FD; stroke-width:2.25px; }
@@ -40,6 +40,8 @@
 <body class="min-h-screen p-5 md:p-8">
   <div class="max-w-7xl mx-auto">
     <header class="flex flex-col items-center gap-4 mb-8">
+      <!-- Logo added here -->
+      <img src="https://kajabi-storefronts-production.kajabi-cdn.com/kajabi-storefronts-production/file-uploads/themes/2162277835/settings_images/3b31360-24e8-a511-851f-cfaccbafe88f_BNM_logo.png" alt="Bass Note Master Logo" class="w-24 h-auto mb-2">
       <h1 class="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-cyan-300">Bass Note Master</h1>
       <nav class="pane px-2 py-1 w-full">
         <div class="flex items-center justify-center gap-2">
@@ -55,7 +57,7 @@
     <main id="app" class="space-y-6"></main>
     <footer class="mt-8">
       <div class="pane px-4 py-3 text-center text-[0.8rem] text-gray-300">
-        © 2025 Groove School | Ted Talks Bass LLC | YouTube @TedTalksBass
+        © 2025 Groove School | Ted Talks Bass LLC | YouTube @TedTalksBass | Version 1.2
       </div>
     </footer>
   </div>
@@ -68,11 +70,16 @@ window.addEventListener('DOMContentLoaded', () => {
   // ---- STATE ----
   const state = {
     isPro: localStorage.getItem('bassTrainerPro') === 'true',
+    isLeftHanded: localStorage.getItem('bassTrainerLeftHanded') === 'true',
     view:'fret',
-    musical:{ root:'C', mode:'ionian', kind:'scale', chordType:'majorTriad', strings:'4' },
+    musical:{ root:'C', mode:'ionian', kind:'scale', chordType:'majorTriad', strings:'4' }, // default to 4 strings
     lessonIndex:0,
-    game:{ on:false, over:false, target:null, found:[], total:0, t0:null, t1:null, timer:null, combo:0, misses:0, msg:'', lastHintAt:null, difficulty:'standard', focusPair:'E&A', justFound:0 }
+    // Added hintsAvailable and hintsUsed to game state for Pro/non-Pro hint limits
+    game:{ on:false, over:false, target:null, found:[], total:0, t0:null, t1:null, timer:null, combo:0, misses:0, msg:'', lastHintAt:null, difficulty:'standard', focusPair:'E&A', justFound:0, hintsUsed:0, score:0, highScore:0 } // Added score and highScore
   };
+
+  // Load high score from local storage
+  state.game.highScore = parseInt(localStorage.getItem('bassTrainerHighScore') || '0', 10);
 
   // ---- THEORY & DATA ----
   const scalesMaj = { 'C':['C','D','E','F','G','A','B'],'G':['G','A','B','C','D','E','F#'],'D':['D','E','F#','G','A','B','C#'],'A':['A','B','C#','D','E','F#','G#'],'E':['E','F#','G#','A','B','C#','D#'],'B':['B','C#','D#','E','F#','G#','A#'],'F#':['F#','G#','A#','B','C#','D#','E#'],'C#':['C#','D#','E#','F#','G#','A#','B#'],'F':['F','G','A','Bb','C','D','E'],'Bb':['Bb','C','D','Eb','F','G','A'],'Eb':['Eb','F','G','Ab','Bb','C','D'],'Ab':['Ab','Bb','C','Db','Eb','F','G'],'Db':['Db','Eb','F','Gb','Ab','Bb','C'],'Gb':['Gb','Ab','Bb','Cb','Db','Eb','F'],'Cb':['Cb','Db','Eb','Fb','Gb','Ab','Bb'] };
@@ -85,6 +92,9 @@ window.addEventListener('DOMContentLoaded', () => {
   const flat = n => ({'C':'Cb','D':'Db','E':'Eb','F':'Fb','G':'Gb','A':'Ab','B':'Bb','C#':'C','D#':'D','E#':'E','F#':'F','G#':'G','A#':'A','B#':'B'}[n]||n);
   const sharp = n => ({'C':'C#','D':'D#','E':'E#','F':'F#','G':'G#','A':'A#','B':'B#','Cb':'C','Db':'D','Eb':'E','Fb':'F','Gb':'G','Ab':'A','Bb':'B'}[n||n]);
   const modeOffset = { ionian:0, dorian:2, phrygian:4, lydian:5, mixolydian:7, aeolian:9, locrian:11 };
+  // Define modes available for free users
+  const freeModes = ['ionian', 'aeolian'];
+
   const parentMajor = (modeRoot, modeName) => { const semi = modeOffset[modeName]; const idx = chromSharp.indexOf(enhNorm(modeRoot)); if (semi===undefined || idx===-1) return null; const pPitch = chromSharp[(idx - semi + 12) % 12]; const opts = Object.keys(scalesMaj).filter(k => enhNorm(k)===pPitch); const match = opts.find(k => scalesMaj[k].some(n => enhNorm(n)===enhNorm(modeRoot))); return match || opts[0] || null; };
   const notesForMode = (modeRoot, modeName) => { const parent = parentMajor(modeRoot, modeName); if (!parent) return []; const scale = scalesMaj[parent]; let start = scale.findIndex(n => enhNorm(n)===enhNorm(modeRoot)); if (start<0) start = 0; return [...scale.slice(start), ...scale.slice(0,start)]; };
   const chordNotes = (root, type) => { const norm = enhNorm(root); const key = Object.keys(scalesMaj).find(k=>enhNorm(k)===norm); if (!key) return []; const scale = scalesMaj[key]; const rIdx = scale.findIndex(n=>enhNorm(n)===norm); if (rIdx<0) return []; const re = [...scale.slice(rIdx), ...scale.slice(0,rIdx)]; const tones=[scale[rIdx]]; switch(type){ case 'majorTriad': tones.push(re[2],re[4]); break; case 'major7th': tones.push(re[2],re[4],re[6]); break; case 'minorTriad': tones.push(flat(re[2]),re[4]); break; case 'minor7th': tones.push(flat(re[2]),re[4],flat(re[6])); break; case 'dominant7th': tones.push(re[2],re[4],flat(re[6])); break; case 'diminishedTriad': tones.push(flat(re[2]),flat(re[4])); break; case 'halfDiminished7th': tones.push(flat(re[2]),flat(re[4]),flat(re[6])); break; case 'diminished7th': tones.push(flat(re[2]),flat(re[4]),flat(flat(re[6]))); break; case 'augmentedTriad': tones.push(re[2],sharp(re[4])); break; default: tones.push(re[2],re[4]); } return tones; };
@@ -96,26 +106,640 @@ window.addEventListener('DOMContentLoaded', () => {
   // ---- RENDERERS ----
   const app = document.getElementById('app');
   function render(){ if (state.view === 'fret') renderFret(); else if (state.view === 'game') renderGame(); else if (state.view === 'lessons' && state.isPro) renderLessons(); else if (state.view === 'lessons' && !state.isPro) renderUpgradeScreen(); }
-  function renderFret(){ const { root, mode, kind, chordType, strings } = state.musical; const notes = kind==='scale' ? notesForMode(root, mode) : chordNotes(root, chordType); const tuning=getTuning(strings); const rootOptions = allRoots.map(k => { const isFree = freeRoots.includes(k); const disabled = !isFree && !state.isPro; return `<option ${k===root?'selected':''} value="${k}" ${disabled ? 'disabled' : ''}>${k} ${disabled ? '(Pro)' : ''}</option>`; }).join(''); const chordOptions = allChordTypes.map(t => { const isFree = freeChordTypes.includes(t); const disabled = !isFree && !state.isPro; const label = t.replace(/([A-Z])/g,' $1').replace(/^./,s=>s.toUpperCase()); return `<option ${t===chordType?'selected':''} value="${t}" ${disabled ? 'disabled' : ''}>${label} ${disabled ? '(Pro)' : ''}</option>`; }).join(''); const svg = drawFretboard({ notes, root, tuning, mode:'display' }); const analysisHtml = kind==='scale' ? composeScaleAnalysis(root, mode) : composeChordAnalysis(root, chordType); const parent = kind==='scale' ? parentMajor(root, mode) : null; const parentRow = kind==='scale' ? renderParentScaleRow(parent, root) : ''; app.innerHTML = ` <section class="grid grid-cols-1 lg:grid-cols-3 gap-6"> <aside class="pane p-5"> <h2 class="text-xl font-bold text-sky-400 mb-4">Controls</h2> <div class="space-y-3"> <div> <label class="block text-sm text-gray-200 mb-1">Strings</label> <select id="sel-strings" class="w-full rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900"> ${['4','5','6'].map(x=>`<option ${x===strings?'selected':''} value="${x}">${x}-string</option>`).join('')} </select> </div> <div> <label class="block text-sm text-gray-200 mb-1">Root</label> <select id="sel-root" class="w-full rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900"> ${rootOptions} </select> </div> <div> <label class="block text-sm text-gray-200 mb-2">Display</label> <div class="flex bg-gray-900/60 p-1 rounded-md border border-white/10"> <button id="btn-kind-scale" class="flex-1 px-3 py-2 rounded-md ${kind==='scale'?'bg-sky-600 text-white':'text-gray-200 hover:bg-white/10'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900">Scale</button> <button id="btn-kind-chord" class="flex-1 px-3 py-2 rounded-md ${kind==='chord'?'bg-sky-600 text-white':'text-gray-200 hover:bg-white/10'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900">Chord</button> </div> </div> <div id="box-mode" ${kind==='scale'?'':'style="display:none"'}> <label class="block text-sm text-gray-200 mb-1">Mode</label> <select id="sel-mode" class="w-full rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900"> ${Object.keys(modeOffset).map(m=>`<option value="${m}" ${m===mode?'selected':''}>${m[0].toUpperCase()+m.slice(1)}</option>`).join('')} </select> </div> <div id="box-chord" ${kind==='chord'?'':'style="display:none"'}> <label class="block text-sm text-gray-200 mb-1">Chord Type</label> <select id="sel-chord" class="w-full rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900"> ${chordOptions} </select> </div> </div> </aside> <section class="lg:col-span-2"> <h2 class="text-2xl md:text-3xl font-extrabold text-sky-300 mb-2">Fretboard</h2> <div id="fret-wrap" class="pane p-4 overflow-x-auto"> ${svg} </div> ${parentRow} <div class="pane p-4 mt-5"> <h3 class="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-cyan-300 mb-3">Analysis</h3> <div id="ai-box" class="min-h-[12rem] p-3 bg-black/20 border border-white/10 rounded-md prose prose-invert max-w-none"> ${analysisHtml} </div> </div> </section> </section>`; document.getElementById('sel-strings').onchange = e => { state.musical.strings=e.target.value; render(); }; document.getElementById('sel-root').onchange = e => { state.musical.root=e.target.value; render(); }; document.getElementById('btn-kind-scale').onclick = () => { state.musical.kind='scale'; render(); }; document.getElementById('btn-kind-chord').onclick = () => { state.musical.kind='chord'; render(); }; const sm = document.getElementById('sel-mode'); if (sm) sm.onchange = e => { state.musical.mode=e.target.value; render(); }; const sc = document.getElementById('sel-chord'); if (sc) sc.onchange = e => { state.musical.chordType=e.target.value; render(); }; }
+  function renderFret(){
+    const { root, mode, kind, chordType, strings } = state.musical;
+    const { isLeftHanded } = state; // Get handedness state
+
+    // Enforce 4-string for non-Pro if higher strings were previously selected
+    if (!state.isPro && (state.musical.strings === '5' || state.musical.strings === '6')) {
+      state.musical.strings = '4';
+    }
+
+    // If not Pro and current mode is not a free mode, default to Ionian
+    if (!state.isPro && !freeModes.includes(state.musical.mode)) {
+      state.musical.mode = 'ionian';
+    }
+
+    const notes = kind==='scale' ? notesForMode(root, mode) : chordNotes(root, chordType);
+    const tuning=getTuning(strings);
+    const rootOptions = allRoots.map(k => { const isFree = freeRoots.includes(k); const disabled = !isFree && !state.isPro; return `<option ${k===root?'selected':''} value="${k}" ${disabled ? 'disabled' : ''}>${k} ${disabled ? '(Pro)' : ''}</option>`; }).join('');
+    const chordOptions = allChordTypes.map(t => { const isFree = freeChordTypes.includes(t); const disabled = !isFree && !state.isPro; const label = t.replace(/([A-Z])/g,' $1').replace(/^./,s=>s.toUpperCase()); return `<option ${t===chordType?'selected':''} value="${t}" ${disabled ? 'disabled' : ''}>${label} ${disabled ? '(Pro)' : ''}</option>`; }).join('');
+    
+    // String options, now with Pro limitations
+    const stringOptions = ['4','5','6'].map(x => {
+      const disabled = !state.isPro && x !== '4';
+      return `<option ${x===strings?'selected':''} value="${x}" ${disabled ? 'disabled' : ''}>${x}-string ${disabled ? '(Pro)' : ''}</option>`;
+    }).join('');
+
+    // Mode options, now with Pro limitations
+    const modeOptions = Object.keys(modeOffset).map(m => {
+      const isFree = freeModes.includes(m);
+      const disabled = !isFree && !state.isPro;
+      return `<option value="${m}" ${m===mode?'selected':''} ${disabled ? 'disabled' : ''}>${m[0].toUpperCase()+m.slice(1)} ${disabled ? '(Pro)' : ''}</option>`;
+    }).join('');
+
+
+    // Pass isLeftHanded to drawFretboard
+    const svg = drawFretboard({ notes, root, tuning, mode:'display', isLeftHanded });
+    const analysisHtml = kind==='scale' ? composeScaleAnalysis(root, mode) : composeChordAnalysis(root, chordType);
+    const parent = kind==='scale' ? parentMajor(root, mode) : null;
+    const parentRow = kind==='scale' ? renderParentScaleRow(parent, root) : '';
+    app.innerHTML = `
+      <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <aside class="pane p-5">
+          <h2 class="text-xl font-bold text-sky-400 mb-4">Controls</h2>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-sm text-gray-200 mb-1">Strings</label>
+              <select id="sel-strings" class="w-full rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900">
+                ${stringOptions}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm text-gray-200 mb-1">Root</label>
+              <select id="sel-root" class="w-full rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900">
+                ${rootOptions}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm text-gray-200 mb-2">Display</label>
+              <div class="flex bg-gray-900/60 p-1 rounded-md border border-white/10">
+                <button id="btn-kind-scale" class="flex-1 px-3 py-2 rounded-md ${kind==='scale'?'bg-sky-600 text-white':'text-gray-200 hover:bg-white/10'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900">Scale</button>
+                <button id="btn-kind-chord" class="flex-1 px-3 py-2 rounded-md ${kind==='chord'?'bg-sky-600 text-white':'text-gray-200 hover:bg-white/10'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900">Chord</button>
+              </div>
+            </div>
+            <div id="box-mode" ${kind==='scale'?'':'style="display:none"'}>
+              <label class="block text-sm text-gray-200 mb-1">Mode</label>
+              <select id="sel-mode" class="w-full rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900">
+                ${modeOptions}
+              </select>
+            </div>
+            <div id="box-chord" ${kind==='chord'?'':'style="display:none"'}>
+              <label class="block text-sm text-gray-200 mb-1">Chord Type</label>
+              <select id="sel-chord" class="w-full rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900">
+                ${chordOptions}
+              </select>
+            </div>
+            <!-- Left-handed Mode Toggle -->
+            <div class="flex items-center justify-between mt-4">
+              <label for="toggle-left-handed" class="block text-sm text-gray-200">Left-handed mode</label>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="toggle-left-handed" class="sr-only peer" ${state.isLeftHanded ? 'checked' : ''}>
+                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-sky-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-600"></div>
+              </label>
+            </div>
+          </div>
+        </aside>
+        <section class="lg:col-span-2">
+          <h2 class="text-2xl md:text-3xl font-extrabold text-sky-300 mb-2">Fretboard</h2>
+          <div id="fret-wrap" class="pane p-4 overflow-x-auto">
+            ${svg}
+          </div>
+          ${parentRow}
+          <div class="pane p-4 mt-5">
+            <h3 class="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-cyan-300 mb-3">Analysis</h3>
+            <div id="ai-box" class="min-h-[12rem] p-3 bg-black/20 border border-white/10 rounded-md prose prose-invert max-w-none">
+              ${analysisHtml}
+            </div>
+          </div>
+        </section>
+      </section>`;
+    document.getElementById('sel-strings').onchange = e => { state.musical.strings=e.target.value; render(); };
+    document.getElementById('sel-root').onchange = e => { state.musical.root=e.target.value; render(); };
+    document.getElementById('btn-kind-scale').onclick = () => { state.musical.kind='scale'; render(); };
+    document.getElementById('btn-kind-chord').onclick = () => { state.musical.kind='chord'; render(); };
+    const sm = document.getElementById('sel-mode'); if (sm) sm.onchange = e => { state.musical.mode=e.target.value; render(); };
+    const sc = document.getElementById('sel-chord'); if (sc) sc.onchange = e => { state.musical.chordType=e.target.value; render(); };
+
+    const leftHandedToggle = document.getElementById('toggle-left-handed');
+    if (leftHandedToggle) {
+      leftHandedToggle.onchange = (e) => {
+        state.isLeftHanded = e.target.checked;
+        localStorage.setItem('bassTrainerLeftHanded', state.isLeftHanded);
+        render(); // Re-render the fretboard with new handedness
+      };
+    }
+  }
   function renderParentScaleRow(parentKey, modeRoot){ if (!parentKey) return ''; const scale = scalesMaj[parentKey] || []; const chips = scale.map(n=>{ const isModeRoot = enhNorm(n)===enhNorm(modeRoot); const isParentTonic = n===parentKey; return `<span class="chip ${isModeRoot?'chip-mode':''} ${isParentTonic?'chip-parent':''}">${n}</span>`; }).join(''); return `<div class="pane p-3 mt-4"><div class="flex items-center gap-2 flex-wrap"><span class="text-sm text-gray-300">Parent Major:</span><span class="font-bold">${parentKey}</span>${chips}</div></div>`; }
-  function gameRulesAllow(openNote, fret){ const d = state.game.difficulty; if (d==='easy' && fret>5) return false; if (d==='focus'){ if (!state.isPro) return false; const [s1,s2] = (state.game.focusPair||'E&A').split('&'); if (![s1,s2].includes(openNote)) return false; } return true; }
-  function drawFretboard({ notes, root, tuning, mode }){ const safeNotes = Array.isArray(notes) ? notes.filter(Boolean) : []; const rootNorm = enhNorm(root); const frets = 12, FW=60, SP=35, OPEN=40, PX=20, PY=30; const width = frets*FW + PX*2 + OPEN; const height = (tuning.length-1)*SP + PY*2 + 30; let s = `<svg id="fret-svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" class="rounded-xl border border-white/10 bg-zinc-800/50">`; s += `<rect x="${PX+OPEN}" y="${PY}" width="${frets*FW}" height="${(tuning.length-1)*SP}" fill="#1F2937" rx="8" ry="8"/>`; for(let i=0;i<=frets;i++) s += `<line x1="${PX+OPEN+i*FW}" y1="${PY}" x2="${PX+OPEN+i*FW}" y2="${PY+(tuning.length-1)*SP}" class="fret"/>`; s += `<line x1="${PX+OPEN}" y1="${PY}" x2="${PX+OPEN}" y2="${PY+(tuning.length-1)*SP}" stroke="#4B5563" stroke-width="5"/>`; ;[3,5,7,9,12].forEach(f=>{ const cx=PX+OPEN+f*FW-FW/2; const cy=PY+((tuning.length-1)*SP)/2; if (f===12){ s+=`<circle cx="${cx}" cy="${cy-12}" r="4" class="inlay"/><circle cx="${cx}" cy="${cy+12}" r="4" class="inlay"/>`; } else { s+=`<circle cx="${cx}" cy="${cy}" r="5" class="inlay"/>`; } }); for(let i=0;i<frets;i++) s += `<text x="${PX+OPEN+(i+1)*FW-FW/2}" y="${PY+(tuning.length-1)*SP+10}" class="fret-num">${i+1}</text>`; tuning.slice().reverse().forEach((open, idx) => { const y = PY + idx*SP; s += `<g><line x1="${PX}" y1="${y}" x2="${PX+OPEN+frets*FW}" y2="${y}" class="string"/>`; for(let f=0; f<=frets; f++){ const nIdx = idxFromOpen(open,f); const note = chromSharp[nIdx]; const isIn = safeNotes.length>0 && safeNotes.some(nn => chromSharp.indexOf(enhNorm(nn))===nIdx); const x = (f===0) ? PX+OPEN/2 : PX+OPEN+f*FW-FW/2; if (mode==='display'){ if (isIn){ const isRoot = chromSharp.indexOf(rootNorm)===nIdx; const cls = `n ${isRoot?'n-root':'n-scale'}`; s += `<g>${isRoot?`<circle cx="${x}" cy="${y}" r="16" class="n-root-ring"/>`:''}<circle cx="${x}" cy="${y}" r="12" class="${cls}"/><text x="${x}" y="${y}" class="nt nt-on" dominant-baseline="central" text-anchor="middle">${note}</text></g>`; } else if (f===0){ s += `<g><circle cx="${x}" cy="${y}" r="12" class="n n-open"/><text x="${x}" y="${y}" class="nt nt-off" dominant-baseline="central" text-anchor="middle">${open}</text></g>`; } } else if (mode==='game'){ if (!gameRulesAllow(open, f)) continue; const id = `${idx}-${f}`; const found = state.game.found.includes(id); const cls = `n ${found?'n-ok':'n-hide'}`; s += `<g class="gn" data-note="${note}" data-id="${id}"><circle cx="${x}" cy="${y}" r="12" class="${cls}"/><text x="${x}" y="${y}" class="nt nt-on" dominant-baseline="central" text-anchor="middle">${found?note:''}</text></g>`; } } s += `</g>`; }); s += `</svg>`; return s; }
+  function gameRulesAllow(openNote, fret){
+    const d = state.game.difficulty;
+    // Removed the specific fret > 7 limitation for non-Pro on 'standard' difficulty.
+    // Now, 'standard' difficulty is 0-12 frets for all users.
+    if (d==='easy' && fret>5) return false;
+    if (d==='focus'){ if (!state.isPro) return false; const [s1,s2] = (state.game.focusPair||'E&A').split('&'); if (![s1,s2].includes(openNote)) return false; }
+    return true;
+  }
+
+  // Modified drawFretboard to support left-handed mode and fret display limits
+  function drawFretboard({ notes, root, tuning, mode, isLeftHanded }){
+    const safeNotes = Array.isArray(notes) ? notes.filter(Boolean) : [];
+    const rootNorm = enhNorm(root);
+    const frets = 12, FW=60, SP=35, OPEN=40, PX=20, PY=30;
+    const width = frets*FW + PX*2 + OPEN;
+    const height = (tuning.length-1)*SP + PY*2 + 30;
+
+    let s = `<svg id="fret-svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" class="rounded-xl border border-white/10 bg-zinc-800/50">`;
+
+    // Fretboard rectangle background
+    const frettedAreaStartX = isLeftHanded ? PX : PX + OPEN;
+    s += `<rect x="${frettedAreaStartX}" y="${PY}" width="${frets*FW}" height="${(tuning.length-1)*SP}" fill="#1F2937" rx="8" ry="8"/>`;
+
+    // Fret lines (including the thick nut line)
+    for(let i=0;i<=frets;i++) {
+      // Removed the fret limit for display mode here
+      const fretLineX = isLeftHanded ? PX + i*FW : PX + OPEN + i*FW;
+      s += `<line x1="${fretLineX}" y1="${PY}" x2="${fretLineX}" y2="${PY+(tuning.length-1)*SP}" class="fret"/>`;
+    }
+
+    // Thick nut line (Fret 0 marker) - drawn separately to override default fret line style
+    const nutLineX = isLeftHanded ? PX + frets*FW : PX + OPEN;
+    s += `<line x1="${nutLineX}" y1="${PY}" x2="${nutLineX}" y2="${PY+(tuning.length-1)*SP}" stroke="#4B5563" stroke-width="5"/>`;
+
+    // Inlays
+    ;[3,5,7,9,12].forEach(f=>{
+      // Removed the fret limit for display mode here
+      const cx_base = frettedAreaStartX + f*FW - FW/2;
+      const cy_base = PY + ((tuning.length-1)*SP)/2;
+      if (f===12){
+        s+=`<circle cx="${cx_base}" cy="${cy_base-12}" r="4" class="inlay"/><circle cx="${cx_base}" cy="${cy_base+12}" r="4" class="inlay"/>`;
+      } else {
+        s+=`<circle cx="${cx_base}" cy="${cy_base}" r="5" class="inlay"/>`;
+      }
+    });
+
+    // Fret numbers
+    for(let i=0;i<frets;i++){
+      const fretNum = i + 1; // Fret numbers from 1 to 12
+      // Removed the fret limit for display mode here
+      const fretNumX = isLeftHanded ? (PX + (frets - fretNum) * FW + FW/2) : (PX + OPEN + fretNum * FW - FW/2);
+      s += `<text x="${fretNumX}" y="${PY+(tuning.length-1)*SP+10}" class="fret-num">${fretNum}</text>`;
+    }
+
+    // Strings and notes
+    tuning.slice().reverse().forEach((open, idx) => {
+      const y = PY + idx*SP;
+      s += `<g><line x1="${PX}" y1="${y}" x2="${PX + frets*FW + OPEN}" y2="${y}" class="string"/>`; // String goes across entire SVG width
+
+      for(let f=0; f<=frets; f++){
+        // Removed the fret limit for display mode here
+        const nIdx = idxFromOpen(open,f);
+        const note = chromSharp[nIdx];
+        const isIn = safeNotes.length>0 && safeNotes.some(nn => chromSharp.indexOf(enhNorm(nn))===nIdx);
+
+        let circleX;
+        if (f === 0) { // Open string note
+          circleX = isLeftHanded ? (PX + frets * FW + OPEN / 2) : (PX + OPEN / 2);
+        } else { // Fretted note
+          circleX = isLeftHanded ? (PX + (frets - f) * FW + FW / 2) : (PX + OPEN + f * FW - FW / 2);
+        }
+
+        if (mode==='display'){
+          if (isIn){
+            const isRoot = chromSharp.indexOf(rootNorm)===nIdx;
+            const cls = `n ${isRoot?'n-root':'n-scale'}`;
+            s += `<g>${isRoot?`<circle cx="${circleX}" cy="${y}" r="16" class="n-root-ring"/>`:''}<circle cx="${circleX}" cy="${y}" r="12" class="${cls}"/><text x="${circleX}" y="${y}" class="nt nt-on" dominant-baseline="central" text-anchor="middle">${note}</text></g>`;
+          } else if (f===0){ // Display open string label if not a scale note
+            s += `<g><circle cx="${circleX}" cy="${y}" r="12" class="n n-open"/><text x="${circleX}" y="${y}" class="nt nt-off" dominant-baseline="central" text-anchor="middle">${open}</text></g>`;
+          }
+        } else if (mode==='game'){
+          // For game mode, the 'standard' difficulty is now 0-12 frets for all users.
+          // 'easy' is still 0-5. 'focus' is Pro-only.
+          const actualFretLimit = (state.game.difficulty === 'easy') ? 5 : frets; // If easy, limit to 5, otherwise full frets (12)
+          if (f > actualFretLimit) continue; // Skip notes beyond the allowed limit
+
+          if (!gameRulesAllow(open, f)) continue; // Skip notes not allowed by general game rules
+
+          const id = `${idx}-${f}`;
+          const found = state.game.found.includes(id);
+          const cls = `n ${found?'n-ok':'n-hide'}`;
+          s += `<g class="gn" data-note="${note}" data-id="${id}"><circle cx="${circleX}" cy="${y}" r="12" class="${cls}"/><text x="${circleX}" y="${y}" class="nt nt-on" dominant-baseline="central" text-anchor="middle">${found?note:''}</text></g>`;
+        }
+      }
+      s += `</g>`;
+    });
+    s += `</svg>`;
+    return s;
+  }
   const MODE_INFO = { ionian: { degree:1, formula:['1','2','3','4','5','6','7'], chars:[], vibe:'bright, stable', chord:'Imaj7' }, dorian: { degree:2, formula:['1','2','b3','4','5','6','b7'], chars:['6'], vibe:'minor with natural 6', chord:'iim7' }, phrygian:{ degree:3, formula:['1','b2','b3','4','5','b6','b7'], chars:['b2'], vibe:'dark, Spanish', chord:'iiim7' }, lydian:  { degree:4, formula:['1','2','3','#4','5','6','7'], chars:['#4'], vibe:'dreamy, floating', chord:'IVmaj7(#11)' }, mixolydian:{ degree:5, formula:['1','2','3','4','5','6','b7'], chars:['b7'], vibe:'dominant, bluesy', chord:'V7' }, aeolian: { degree:6, formula:['1','2','b3','4','5','b6','b7'], chars:['b6'], vibe:'natural minor', chord:'vim7' }, locrian: { degree:7, formula:['1','b2','b3','4','b5','b6','b7'], chars:['b5'], vibe:'unstable, tense', chord:'viiø7' } };
   function composeScaleAnalysis(root, mode){ const info = MODE_INFO[mode]; if (!info) return ''; const parent = parentMajor(root, mode); const parentScale = scalesMaj[parent] || []; const modeNotes = notesForMode(root, mode); const formula = info.formula.join(' '); const sections = [ `<h4 class="font-bold text-sky-300">Parent Key</h4><p><strong>${parent} major</strong> · ${parentScale.join(' ')}</p>`, `<h4 class="font-bold text-sky-300">Mode Notes</h4><p><strong>${root} ${mode}</strong> · ${modeNotes.join(' ')}</p>`, `<h4 class="font-bold text-sky-300">Formula</h4><p>${formula}</p>`, `<h4 class="font-bold text-sky-300">On the Bass</h4><ul class="list-disc ml-6"><li>Octave: up two strings, back three frets.</li><li>Lock time by landing on <strong>root</strong> and <strong>5th</strong>; color with the characteristic tone (${info.chars.join(', ')||'—'}).</li></ul>`, `<h4 class="font-bold text-sky-300">Context</h4><p>Typical chord: <strong>${info.chord}</strong>. Vibe: ${info.vibe}. Great for funk, pop, and film cues depending on tempo and note choice.</p>` ]; return sections.join(''); }
   const CHORD_INFO = { majorTriad: { name: 'Major Triad', degrees:['1','3','5'], function:'Tonic or Subdominant', character:'stable, open', usage:'I or IV in major; I in modal contexts.', resolution:'Moves anywhere; to V for lift, to vi for deceptive.', scales:['Ionian','Major pentatonic'], tips:'Outline R–5–R; add 6 or 9 for color.' }, major7th: { name: 'Major 7th', degrees:['1','3','5','7'], function:'Tonic (Imaj7) or IVmaj7 (jazz color)', character:'lush, settled', usage:'Imaj7 holds; IVmaj7 often leads to V.', resolution:'When IVmaj7 → V or ii–V.', scales:['Ionian (over Imaj7)','Lydian (over IVmaj7)'], tips:'Target 3rd & 7th; avoid natural 4 over I unless Lydian.' }, minorTriad: { name: 'Minor Triad', degrees:['1','b3','5'], function:'Predominant or Tonic (minor)', character:'moody, neutral', usage:'ii or vi in major; i, iv, v in minor.', resolution:'Commonly → V or i.', scales:['Aeolian','Dorian','Minor pentatonic'], tips:'Use R–b3–5; add b7 for soulful motion.' }, minor7th: { name: 'Minor 7th', degrees:['1','b3','5','b7'], function:'Predominant (ii7) or Tonic (i7 modal)', character:'warm, soulful', usage:'ii7 → V7 → I; i7 holds in modal tunes.', resolution:'Guide tones (b3 & b7) pull to V7’s 3rd & root.', scales:['Dorian (over ii7)','Aeolian (over i7)'], tips:'Land b3/b7 on strong beats.' }, dominant7th: { name: 'Dominant 7th', degrees:['1','3','5','b7'], function:'Dominant', character:'tense, bluesy; wants to resolve', usage:'V7 resolving down a fifth / up a fourth to I.', resolution:'3rd of V7 → root of I; b7 of V7 → 3rd of I.', scales:['Mixolydian','Blues','Altered (on V in minor)'], tips:'Walk R–3–b7–3; approach root chromatically into I.' }, diminishedTriad: { name: 'Diminished Triad', degrees:['1','b3','b5'], function:'Leading-tone or passing', character:'unstable, tight', usage:'vii° in major; ii° in minor; passing between chords.', resolution:'Resolve inward to I or outward to iii.', scales:['Locrian fragment'], tips:'Use as quick approach—don’t sit on it.' }, halfDiminished7th: { name: 'Half-Diminished 7th (m7♭5)', degrees:['1','b3','b5','b7'], function:'Predominant / Leading-tone (viiø7 in major)', character:'somber, suspended', usage:'iiø7 in minor progressions.', resolution:'→ V or directly → i.', scales:['Locrian ♮2'], tips:'Resolve the b5 inward (to 4 or to 5 in the next chord).' }, diminished7th: { name: 'Diminished 7th', degrees:['1','b3','b5','bb7'], function:'Leading-tone (fully diminished)', character:'high tension, symmetrical', usage:'vii°7 in harmonic minor; common-tone diminished.', resolution:'Strong pull to i (enharmonically to four tonics).', scales:['Whole–Half Diminished'], tips:'Chromatic approach into tonic; pivot enharmonically.' }, augmentedTriad: { name: 'Augmented Triad', degrees:['1','3','#5'], function:'Color dominant / mediant', character:'bright, ambiguous', usage:'V+ or III+ sonorities; filmic color.', resolution:'#5 → 6 to resolve to I or → vi.', scales:['Whole Tone'], tips:'Lean on #5 then step to 6 to “solve” the color.' } };
   function composeChordAnalysis(root, chordType){ const info = CHORD_INFO[chordType] || null; const tones = chordNotes(root, chordType); const niceName = chordType.replace(/([A-Z])/g,' $1').replace(/^./, s=>s.toUpperCase()); const guide = []; if (tones[1]) guide.push(tones[1]); if (tones[3]) guide.push(tones[3]); const chips = tones.map((n,i)=>`<span class="chip ${i===0?'chip-parent':''}">${n}${i===1?' (3rd)':''}${i===3?' (7th)':''}</span>`).join(''); const fnChar = info ? `<strong>${info.function}</strong> — ${info.character}.` : '—'; const uses = info?.usage || ''; const reso = info?.resolution || ''; const tips = info?.tips || ''; const scales = info?.scales ? info.scales.join(', ') : ''; return ` <h4 class="font-bold text-sky-300">Chord</h4> <p><strong>${root} ${niceName}</strong> · ${tones.join(' ')}</p> <div class="mt-2">${chips}</div> <h4 class="font-bold text-sky-300 mt-3">Function & Character</h4> <p>${fnChar}</p> ${uses||reso?`<h4 class=\"font-bold text-sky-300 mt-3\">Common Uses & Resolution</h4><p>${[uses,reso].filter(Boolean).join(' — ')}</p>`:''} ${tips?`<h4 class=\"font-bold text-sky-300 mt-3\">Bass Moves</h4><ul class=\"list-disc ml-6\"><li>${tips}</li><li>Target <strong>${guide.join(' & ')||'guide tones'}</strong> on strong beats.</li></ul>`:''} ${scales?`<h4 class=\"font-bold text-sky-300 mt-3\">Suggested Scales</h4><p>${scales}</p>`:''} `; }
   const lessons = [ { title:'Understanding the Fretboard', concepts:["Only 12 unique notes exist.","Each note appears once per string < 12th fret.","Above 12th repeats."], activity:["Pick one note (e.g., C).","Find it on each string < 12th fret.","Say the note as you play.","Write the fret numbers on a diagram."], homework:["Repeat with another note.","Use the Circle of Fifths below for order."] }, { title:'Grouping the Notes', concepts:["Use the Circle of Fifths.","Break into 4 groups of 3.","Groups: C–F–Bb | Eb–Ab–Db | Gb–B–E | A–D–G"], activity:["Focus on Group 1 only.","Find each note on every string.","No metronome yet."], homework:["Practice Group 1 for 2–3 days before Group 2."] }, { title:'Adding the Metronome', concepts:["Timing reinforces accuracy.","Start slow."], activity:["40 BPM.","Pick your 3-note group.","8 reps per string per note.","Cycle all three notes."], homework:["Twice daily.","Stay at 40 BPM until clean."] }, { title:'Full Circle of Fifths Run', concepts:["Connect all notes in sequence.","Build mental maps."], activity:["Start at C.","8 reps per string.","Go through all 12 notes."], homework:["Run the full circle daily.","Accuracy before speed."] }, { title:'Two-Note Alternation', concepts:["Switch targets quickly.","Train up/down movement."], activity:["Pairs: C–F, Bb–Eb, Ab–Db, Gb–B, E–A, D–G.","Up the first, down the second."], homework:["All six pairs at 40 BPM.","No hesitation."] }, { title:'Apply to Full Circle', concepts:["Combine alternation + full circle."], activity:["Use up-one/down-next through the circle."], homework:["Daily run.","Keep 40 BPM until automatic."] }, { title:'Increase Speed', concepts:["Gradual tempo growth.","Keep accuracy."], activity:["From 40→50 BPM.","Add 5–10 weekly until 80."], homework:["Maintain top clean speed.","Revisit slow tempos weekly."] }, { title:'Make It Musical', concepts:["Groove & articulation.","Technique + knowledge."], activity:["Add drums or backing.","Fingerstyle / Slap / Pick.","Staccato, legato, accents."], homework:["Record full circle musically.","Review time, tone, accuracy."] } ];
   function renderLessons(){ const L = lessons[state.lessonIndex]; const html = ` <section class="space-y-4"> <div class="text-center"> <p class="text-sky-300 font-semibold">Lesson ${state.lessonIndex+1} of ${lessons.length}</p> <h2 class="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-sky-300 to-cyan-400">${L.title}</h2> </div> <div class="flex justify-between gap-3"> <button id="btn-prev" class="pane px-4 py-2 rounded-md text-sm ${state.lessonIndex===0?'opacity-40 cursor-not-allowed':''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900">Previous</button> <button id="btn-next" class="pane px-4 py-2 rounded-md text-sm ${state.lessonIndex===lessons.length-1?'opacity-40 cursor-not-allowed':''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900">Next</button> </div> <div class="pane p-5"> <h3 class="font-bold text-sky-400 mb-1">💡 Concepts</h3> <ul class="list-disc ml-6 mb-4">${L.concepts.map(x=>`<li>${x}</li>`).join('')}</ul> <h3 class="font-bold text-sky-400 mb-1">🎸 Activity</h3> <ul class="list-disc ml-6 mb-4">${L.activity.map(x=>`<li>${x}</li>`).join('')}</ul> <h3 class="font-bold text-sky-400 mb-1">📚 Homework</h3> <ul class="list-disc ml-6">${L.homework.map(x=>`<li>${x}</li>`).join('')}</ul> </div> ${renderCircle()} </section>`; app.innerHTML = html; document.getElementById('btn-prev').onclick = () => { if (state.lessonIndex>0){ state.lessonIndex--; render(); } }; document.getElementById('btn-next').onclick = () => { if (state.lessonIndex<lessons.length-1){ state.lessonIndex++; render(); } }; }
-  function renderUpgradeScreen() { app.innerHTML = ` <section class="pane p-8 text-center max-w-2xl mx-auto"> <h2 class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-sky-400 mb-4">Upgrade to Pro</h2> <p class="text-lg text-gray-300 mb-6">Unlock all 8 step-by-step lessons and the complete Circle of Fifths guide to master the fretboard.</p> <div class="bg-gray-900/50 p-6 rounded-lg border border-white/10 mb-6"> <p class="text-5xl font-bold text-white mb-2">$19.99</p> <p class="text-gray-400">One-time payment, lifetime access.</p> </div> <button id="btn-purchase" class="w-full px-6 py-3 rounded-md font-bold bg-purple-600 text-white hover:bg-purple-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 text-lg"> Unlock All Lessons </button> </section> `; const purchaseBtn = document.getElementById('btn-purchase'); purchaseBtn.onclick = async () => { purchaseBtn.innerHTML = '<span class="spinner"></span>Redirecting to checkout...'; purchaseBtn.disabled = true; try { const response = await fetch('/checkout', { method: 'POST' }); const data = await response.json(); if (response.ok) { window.location.href = data.url; } else { console.error('Backend Error:', data.error); purchaseBtn.textContent = `Error: ${data.error || 'Please try again.'}`; purchaseBtn.disabled = false; } } catch (e) { console.error('Fetch Error:', e); purchaseBtn.textContent = 'Network Error! Please try again.'; purchaseBtn.disabled = false; } }; }
+  function renderUpgradeScreen() {
+    app.innerHTML = `
+      <section class="pane p-8 text-center max-w-2xl mx-auto">
+        <h2 class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-sky-400 mb-4">Upgrade to Pro</h2>
+        <p class="text-lg text-gray-300 mb-6">Unlock all 8 step-by-step lessons and the complete Circle of Fifths guide to master the fretboard.</p>
+        <div class="bg-gray-900/50 p-6 rounded-lg border border-white/10 mb-6">
+          <p class="text-5xl font-bold text-white mb-2">$19.99</p>
+          <p class="text-gray-400">One-time payment, lifetime access.</p>
+        </div>
+        <button id="btn-purchase" class="w-full px-6 py-3 rounded-md font-bold bg-purple-600 text-white hover:bg-purple-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 text-lg">
+          Unlock All Lessons
+        </button>
+      </section>
+    `;
+    const purchaseBtn = document.getElementById('btn-purchase');
+    if (purchaseBtn) { // Ensure button exists before attaching event
+      purchaseBtn.onclick = async () => {
+        const originalText = purchaseBtn.innerHTML;
+        purchaseBtn.innerHTML = '<span class="spinner"></span>Redirecting to checkout...';
+        purchaseBtn.disabled = true;
+
+        try {
+          const response = await fetch('/checkout', { method: 'POST' });
+          const data = await response.json();
+
+          if (response.ok && data.url) {
+            window.location.href = data.url;
+          } else {
+            console.error('Backend Error or Missing URL:', data.error || 'No URL provided');
+            purchaseBtn.textContent = `Error: ${data.error || 'Failed to get checkout URL.'}`;
+            // Re-enable button after a short delay for user to read error
+            setTimeout(() => {
+              purchaseBtn.innerHTML = originalText;
+              purchaseBtn.disabled = false;
+            }, 2000);
+          }
+        } catch (e) {
+          console.error('Fetch Error:', e);
+          purchaseBtn.textContent = 'Network Error! Please try again.';
+          setTimeout(() => {
+            purchaseBtn.innerHTML = originalText;
+            purchaseBtn.disabled = false;
+          }, 2000);
+        }
+      };
+    }
+  }
   function renderCircle(){ const entries=['C','G','D','A','E','B / Cb','F# / Gb','C# / Db','Ab','Eb','Bb','F']; const size=420; const r=180; const cx=size/2; const cy=size/2; let s = `<div class="mt-6 flex flex-col items-center"> <h3 class='text-lg font-semibold text-sky-400 mb-2'>Reference: Circle of Fifths</h3> <svg width='${size}' height='${size}' viewBox='0 0 ${size} ${size}'>`; s += `<circle cx='${cx}' cy='${cy}' r='${r}' fill='rgba(17,24,39,.55)' stroke='rgba(255,255,255,.12)' stroke-width='2'/>`; s += `<circle cx='${cx}' cy='${cy}' r='${r-22}' fill='none' stroke='rgba(255,255,255,.08)' stroke-dasharray='6 10'/>`; for(let i=0;i<12;i++){ const a=(i*30-90)*Math.PI/180; const x1=cx+(r-12)*Math.cos(a), y1=cy+(r-12)*Math.sin(a); const x2=cx+(r-2)*Math.cos(a), y2=cy+(r-2)*Math.sin(a); s += `<line x1='${x1}' y1='${y1}' x2='${x2}' y2='${y2}' stroke='rgba(255,255,255,.22)' stroke-width='1'/>`; } entries.forEach((entry,i)=>{ const a=(i*30-90)*Math.PI/180; const tx=cx+(r-36)*Math.cos(a), ty=cy+(r-36)*Math.sin(a); const parts = entry.split(' / '); if (parts.length===1){ s += `<text x='${tx}' y='${ty}' text-anchor='middle' dominant-baseline='central' fill='#e5e7eb' font-weight='700' font-size='18'>${parts[0]}</text>`; } else { s += `<text x='${tx}' y='${ty-8}' text-anchor='middle' fill='#e5e7eb' font-weight='700' font-size='14'>${parts[0]}</text>`; s += `<text x='${tx}' y='${ty+12}' text-anchor='middle' fill='#cbd5e0' font-weight='700' font-size='14'>${parts[1]}</text>`; } const dx=cx+(r-6)*Math.cos(a), dy=cy+(r-6)*Math.sin(a); s += `<circle cx='${dx}' cy='${dy}' r='2' fill='rgba(103,232,249,.6)'/>`; }); s += `</svg></div>`;  return s; }
-  function renderGame(){ const G = state.game; let content=''; const tuningMap={ '4':['E','A','D','G'], '5':['B','E','A','D','G'], '6':['B','E','A','D','G','C'] }; const tuning=tuningMap[state.musical.strings]; const pairs = focusPairsForTuning(tuning); if (!pairs.some(p=>p.key===G.focusPair)) state.game.focusPair = pairs[0]?.key || 'E&A'; const cdMs = G.lastHintAt ? Math.max(0, 10000 - (Date.now()-G.lastHintAt)) : 0; const cdSec = Math.ceil(cdMs/1000); const focusSelect = () => ` <label for='sel-focus' class='text-sm text-gray-300 ml-2'>Focus strings</label> <select id='sel-focus' class='rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'> ${pairs.map(p=>`<option value='${p.key}' ${p.key===G.focusPair?'selected':''}>${p.label}</option>`).join('')} </select>`; if (!G.on && !G.over){ content = `<div class='space-y-4'> <div class='pane p-4 flex flex-wrap items-center justify-between gap-3'> <div class='text-sm text-gray-300'>Choose strings, difficulty & start a round.</div> <div class='flex flex-wrap items-center gap-2'> <label for='sel-strings-game' class='text-sm text-gray-300'>Strings</label> <select id='sel-strings-game' class='rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'> ${['4','5','6'].map(x=>`<option ${x===state.musical.strings?'selected':''} value="${x}">${x}-string</option>`).join('')} </select> <label for='sel-diff' class='text-sm text-gray-300 ml-2'>Difficulty</label> <select id='sel-diff' class='rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'> <option value='easy' ${G.difficulty==='easy'?'selected':''}>Easy (0–5)</option> <option value='standard' ${G.difficulty==='standard'?'selected':''}>Standard (0–12)</option> <option value='focus' ${G.difficulty==='focus'?'selected':''} ${!state.isPro ? 'disabled' : ''}>Focus ${!state.isPro ? '(Pro)' : ''}</option> </select> ${G.difficulty==='focus' && state.isPro ? focusSelect():''} <button id='btn-start' class='px-4 py-2 rounded-md font-bold bg-green-600 text-white hover:bg-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'>Start game</button> </div> </div> <div class='pane p-8 text-center'> <h2 class='text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500 mb-2'>Note Finder Challenge</h2> <p class='text-gray-300'>Find every instance of the chosen note (0–12 frets). Build combo, keep accuracy high.</p> </div> </div>`; } else if (G.on){ const svg = drawFretboard({ notes:[G.target], root:G.target, tuning, mode:'game' }); const attempts = G.found.length + (G.misses||0); const acc = attempts ? Math.round((G.found.length/attempts)*100) : 100; content = `<div class='space-y-4'> <div class='pane p-4 grid grid-cols-6 gap-2 text-center items-center sticky top-2 z-10'> <div><p class='text-xs text-gray-400'>Find</p><p class='text-3xl md:text-4xl font-extrabold text-green-400'>${G.target}</p></div> <div><p class='text-xs text-gray-400'>Found</p><p class='text-2xl font-extrabold'>${G.found.length}/${G.total}</p></div> <div><p class='text-xs text-gray-400'>Combo</p><p class='text-2xl font-extrabold'>${G.combo||0}×</p></div> <div><p class='text-xs text-gray-400'>Accuracy</p><p class='text-2xl font-extrabold'>${acc}%</p></div> <div><p class='text-xs text-gray-400'>Time</p><p id='game-timer' class='text-2xl font-extrabold'>0s</p></div> <div><p class='text-xs text-gray-400'>Difficulty</p><p class='text-lg font-bold'>${labelForDiff(G.difficulty)}</p></div> <div class='col-span-6 mt-2 flex justify-center gap-1'>${progressBarHtml(G.total, G.found.length)}</div> </div> <div class='pane p-4 flex flex-wrap items-center justify-between gap-3'> <div class='flex items-center gap-2'> <label for='sel-strings-game' class='text-sm text-gray-300'>Strings</label> <select id='sel-strings-game' class='rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'> ${['4','5','6'].map(x=>`<option ${x===state.musical.strings?'selected':''} value=\"${x}\">${x}-string</option>`).join('')} </select> <label for='sel-diff' class='text-sm text-gray-300 ml-2'>Difficulty</label> <select id='sel-diff' class='rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'> <option value='easy' ${G.difficulty==='easy'?'selected':''}>Easy (0–5)</option> <option value='standard' ${G.difficulty==='standard'?'selected':''}>Standard (0–12)</option> <option value='focus' ${G.difficulty==='focus'?'selected':''} ${!state.isPro ? 'disabled' : ''}>Focus ${!state.isPro ? '(Pro)' : ''}</option> </select> ${G.difficulty==='focus' && state.isPro ? focusSelect():''} </div> <div class='flex items-center gap-2'> <button id='btn-new' class='px-3 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'>New note</button> <button id='btn-reset' class='px-3 py-2 rounded-md bg-gray-600 text-white hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'>Reset round</button> <button id='btn-hint' ${cdMs>0?'disabled':''} class='px-3 py-2 rounded-md ${cdMs>0?'bg-gray-700 text-gray-300':'bg-purple-600 text-white hover:bg-purple-700'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'>${cdMs>0?`<span class="spinner"></span>Hint (${cdSec}s)`:'Hint'}</button> </div> </div> <div class='pane p-4'>${svg}</div> </div>`; } else { const time=((G.t1-G.t0)/1000).toFixed(2); content = `<div class='space-y-4'> <div class='pane p-4 flex flex-wrap items-center justify-between gap-3'> <div class='flex items-center gap-2'> <label for='sel-strings-game' class='text-sm text-gray-300'>Strings</label> <select id='sel-strings-game' class='rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'> ${['4','5','6'].map(x=>`<option ${x===state.musical.strings?'selected':''} value=\"${x}\">${x}-string</option>`).join('')} </select> <label for='sel-diff' class='text-sm text-gray-300 ml-2'>Difficulty</label> <select id='sel-diff' class='rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'> <option value='easy' ${G.difficulty==='easy'?'selected':''}>Easy (0–5)</option> <option value='standard' ${G.difficulty==='standard'?'selected':''}>Standard (0–12)</option> <option value='focus' ${G.difficulty==='focus'?'selected':''} ${!state.isPro ? 'disabled' : ''}>Focus ${!state.isPro ? '(Pro)' : ''}</option> </select> ${G.difficulty==='focus' && state.isPro ? focusSelect():''} </div> <div class='flex items-center gap-2'> <button id='btn-start' class='px-4 py-2 rounded-md font-bold bg-green-600 text-white hover:bg-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'>Play again</button> </div> </div> <div class='pane p-8 text-center'><h2 class='text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500 mb-2'>Challenge Complete!</h2><p class='text-gray-300 text-lg mb-6'>You found all <strong>${G.target}</strong> notes in <strong>${time}</strong> seconds.</p></div> </div>`; } app.innerHTML = content; const sel = document.getElementById('sel-strings-game'); if (sel) sel.onchange = e => { state.musical.strings=e.target.value; if (state.game.difficulty==='focus') ensureFocusPairValid(); if (state.game.on) startGame(); else render(); }; const selDiff = document.getElementById('sel-diff');  if (selDiff) { selDiff.onchange = e => {  state.game.difficulty = e.target.value;  if (state.game.difficulty === 'focus' && !state.isPro) { state.game.difficulty = 'standard'; } if (state.game.difficulty==='focus') ensureFocusPairValid();  if (state.game.on) restartRound();  else render();  }; } const selFocus = document.getElementById('sel-focus'); if (selFocus) selFocus.onchange = e => { state.game.focusPair = e.target.value; if (state.game.on) restartRound(); else render(); }; const start = document.getElementById('btn-start'); if (start) start.onclick = startGame; const btnNew = document.getElementById('btn-new'); if (btnNew) btnNew.onclick = () => startGame(); const btnReset = document.getElementById('btn-reset'); if (btnReset) btnReset.onclick = restartRound; const btnHint = document.getElementById('btn-hint'); if (btnHint) btnHint.onclick = hintOne; if (state.game.on){ document.getElementById('fret-svg').addEventListener('click', onGameClick); if (state.game.timer) clearInterval(state.game.timer); state.game.timer = setInterval(()=>{ const tEl=document.getElementById('game-timer'); if (tEl) tEl.textContent = Math.floor((Date.now()-state.game.t0)/1000) + 's'; const hb=document.getElementById('btn-hint'); if (hb){ const ms = state.game.lastHintAt ? 10000 - (Date.now()-state.game.lastHintAt) : 0; if (ms>0){ hb.disabled=true; hb.innerHTML = `<span class="spinner"></span>Hint (${Math.ceil(ms/1000)}s)`; hb.classList.add('bg-gray-700','text-gray-300'); hb.classList.remove('bg-purple-600','hover:bg-purple-700','text-white'); } else { hb.disabled=false; hb.textContent='Hint'; hb.classList.remove('bg-gray-700','text-gray-300'); hb.classList.add('bg-purple-600','text-white'); } } }, 500); if (state.game.justFound){ const chip = document.querySelector(`.bar.fg[data-idx="${state.game.justFound-1}"]`); if (chip){ chip.classList.add('bar-pulse'); setTimeout(()=>chip.classList.remove('bar-pulse'), 240); } state.game.justFound = 0; } } }
-  function labelForDiff(d){ if (d === 'focus' && !state.isPro) return 'Standard 0-12'; return d==='easy' ? 'Easy 0–5' : d==='focus' ? ('Focus ' + (state.game.focusPair||'E&A').replace('&',' & ')) : 'Standard 0–12'; }
-  function computeTotalForTarget(target){ const tuning=getTuning(state.musical.strings); let total=0; tuning.forEach(open=>{ for(let f=0; f<=12; f++){ if (!gameRulesAllow(open,f)) continue; if (chromSharp[idxFromOpen(open,f)]===target) total++; }}); return total; }
-  function startGame(){ const notes = chromSharp; const target = notes[Math.floor(Math.random()*notes.length)]; const total = computeTotalForTarget(target); Object.assign(state.game,{ on:true, over:false, target, found:[], total, t0:Date.now(), t1:null, combo:0, misses:0, msg:'', lastHintAt:null, justFound:0 }); if (state.game.timer) clearInterval(state.game.timer); render(); }
-  function restartRound(){ if (!state.game.target){ startGame(); return; } const t = state.game.target; const total = computeTotalForTarget(t); Object.assign(state.game,{ on:true, over:false, target:t, found:[], total, t0:Date.now(), t1:null, combo:0, misses:0, msg:'', lastHintAt:null, justFound:0 }); if (state.game.timer) clearInterval(state.game.timer); render(); }
-  function hintOne(){ const now = Date.now(); if (state.game.lastHintAt && (now - state.game.lastHintAt) < 10000) return; const nodes = Array.from(document.querySelectorAll(`.gn[data-note="${state.game.target}"]`)); const hidden = nodes.filter(n => !state.game.found.includes(n.getAttribute('data-id'))); if (!hidden.length) return; const pick = hidden[Math.floor(Math.random()*hidden.length)]; const circle = pick.querySelector('circle'); if (circle){ circle.classList.add('n-hint'); setTimeout(()=>circle.classList.remove('n-hint'), 1100); } state.game.lastHintAt = now; }
-  function onGameClick(e){ const g = e.target.closest('.gn'); if (!g) return; const note = g.getAttribute('data-note'); const id = g.getAttribute('data-id'); const c = g.querySelector('circle'); if (state.game.found.includes(id)) return; if (note===state.game.target){ state.game.found.push(id); state.game.combo++; state.game.justFound = state.game.found.length; if (c){ c.classList.add('hit-pulse'); c.classList.remove('n-hide'); c.classList.add('n-ok'); setTimeout(()=>c.classList.remove('hit-pulse'),180);} if (state.game.found.length===state.game.total){ endGame(); return; } } else { state.game.combo=0; state.game.misses++; if (c){ c.classList.add('miss-shake'); c.classList.remove('n-hide'); c.classList.add('n-bad'); setTimeout(()=>{ if (!state.game.found.includes(id)){ c.classList.remove('n-bad'); c.classList.add('n-hide'); } c.classList.remove('miss-shake'); },220);} } setTimeout(render, 180); }
-  function endGame(){ state.game.on=false; state.game.over=true; state.game.t1=Date.now(); burstConfetti(); render(); }
+  function gameRulesAllow(openNote, fret){
+    const d = state.game.difficulty;
+    // Removed the specific fret > 7 limitation for non-Pro on 'standard' difficulty.
+    // Now, 'standard' difficulty is 0-12 frets for all users.
+    if (d==='easy' && fret>5) return false;
+    if (d==='focus'){ if (!state.isPro) return false; const [s1,s2] = (state.game.focusPair||'E&A').split('&'); if (![s1,s2].includes(openNote)) return false; }
+    return true;
+  }
+  function computeTotalForTarget(target){
+    const tuning=getTuning(state.musical.strings);
+    let total=0;
+    tuning.forEach(open=>{
+      for(let f=0; f<=12; f++){
+        // Use the gameRulesAllow to compute total playable notes for scoring
+        if (!gameRulesAllow(open,f)) continue;
+        if (chromSharp[idxFromOpen(open,f)]===target) total++;
+      }
+    });
+    return total;
+  }
+  function startGame(){
+    const notes = chromSharp;
+    const target = notes[Math.floor(Math.random()*notes.length)];
+    const total = computeTotalForTarget(target);
+    Object.assign(state.game,{
+      on:true, over:false, target, found:[], total, t0:Date.now(), t1:null,
+      combo:0, misses:0, msg:'', lastHintAt:null, justFound:0,
+      hintsUsed: 0,
+      score: 0 // Reset score for new game
+    });
+    if (state.game.timer) clearInterval(state.game.timer);
+    render();
+  }
+  function restartRound(){
+    if (!state.game.target){ startGame(); return; }
+    const t = state.game.target;
+    const total = computeTotalForTarget(t);
+    Object.assign(state.game,{
+      on:true, over:false, target:t, found:[], total, t0:Date.now(), t1:null,
+      combo:0, misses:0, msg:'', lastHintAt:null, justFound:0,
+      hintsUsed: 0,
+      score: 0 // Reset score for new round
+    });
+    if (state.game.timer) clearInterval(state.game.timer);
+    render();
+  }
+  function hintOne(){
+    const now = Date.now();
+    // Check if hints are available for non-pro users (1 per game)
+    if (!state.isPro && state.game.hintsUsed >= 1) {
+      return;
+    }
+    // Original cooldown logic
+    if (state.game.lastHintAt && (now - state.game.lastHintAt) < 10000) return;
+
+    const nodes = Array.from(document.querySelectorAll(`.gn[data-note="${state.game.target}"]`));
+    const hidden = nodes.filter(n => !state.game.found.includes(n.getAttribute('data-id')));
+    if (!hidden.length) return;
+    const pick = hidden[Math.floor(Math.random()*hidden.length)];
+    const circle = pick.querySelector('circle');
+    if (circle){
+      circle.classList.add('n-hint');
+      setTimeout(()=>circle.classList.remove('n-hint'), 1100);
+    }
+    state.game.lastHintAt = now;
+    if (!state.isPro) { // Only decrement for non-pro users
+      state.game.hintsUsed++;
+    }
+    render(); // Re-render to update hint button state
+  }
+  function onGameClick(e){
+    const g = e.target.closest('.gn');
+    if (!g) return;
+    const note = g.getAttribute('data-note');
+    const id = g.getAttribute('data-id');
+    const c = g.querySelector('circle');
+
+    // Prevent interaction with already found notes or notes outside current game rules
+    if (state.game.found.includes(id) || !gameRulesAllow(tuning.slice().reverse()[parseInt(id.split('-')[0])], parseInt(id.split('-')[1]))) return;
+
+    if (note===state.game.target){
+      state.game.found.push(id);
+      state.game.combo++;
+      state.game.score += 100 + (state.game.combo * 10); // Reward for correct note and combo
+      state.game.justFound = state.game.found.length;
+      if (c){
+        c.classList.add('hit-pulse');
+        c.classList.remove('n-hide');
+        c.classList.add('n-ok');
+        setTimeout(()=>c.classList.remove('hit-pulse'),180);
+      }
+      if (state.game.found.length===state.game.total){
+        endGame();
+        return;
+      }
+    } else {
+      state.game.combo=0;
+      state.game.misses++;
+      state.game.score = Math.max(0, state.game.score - 50); // Penalize for incorrect note
+      if (c){
+        c.classList.add('miss-shake');
+        c.classList.remove('n-hide');
+        c.classList.add('n-bad');
+        setTimeout(()=>{
+          if (!state.game.found.includes(id)){
+            c.classList.remove('n-bad');
+            c.classList.add('n-hide');
+          }
+          c.classList.remove('miss-shake');
+        },220);
+      }
+    }
+    setTimeout(render, 180);
+  }
+  function endGame(){
+    state.game.on=false;
+    state.game.over=true;
+    state.game.t1=Date.now();
+
+    // Calculate final score with time bonus
+    const timeTakenSeconds = (state.game.t1 - state.game.t0) / 1000;
+    const timeBonus = Math.max(0, 1000 - (timeTakenSeconds * 10)); // Example: 1000 points, -10 for each second
+    state.game.score = Math.max(0, state.game.score + timeBonus); // Ensure score doesn't go negative
+
+    // Update high score
+    if (state.game.score > state.game.highScore) {
+      state.game.highScore = state.game.score;
+      localStorage.setItem('bassTrainerHighScore', state.game.highScore);
+    }
+
+    burstConfetti();
+    render();
+  }
+  function progressBarHtml(total, found){ let html=''; for(let i=0;i<total;i++){ html += `<span class="bar ${i<found?'fg':'bg'} w-5" data-idx="${i}"></span>`; } return html; }
+  function burstConfetti(){ const colors=['#22D3EE','#A78BFA','#34D399','#F59E0B','#F472B6']; for(let i=0;i<28;i++){ const el=document.createElement('span'); el.className='confetti-piece'; el.style.left = Math.random()*100 + 'vw'; el.style.background = colors[Math.floor(Math.random()*colors.length)]; el.style.animationDuration = (1 + Math.random()*0.8)+'s'; el.style.transform = `translateY(-20px) rotate(${Math.random()*360}deg)`; document.body.appendChild(el); setTimeout(()=>el.remove(), 1800);} }
+
+  function renderGame(){
+    const G = state.game;
+    const { isLeftHanded } = state; // Get handedness state
+    let content='';
+    const tuningMap={ '4':['E','A','D','G'], '5':['B','E','A','D','G'], '6':['B','E','A','D','G','C'] };
+    const tuning=tuningMap[state.musical.strings];
+    const pairs = focusPairsForTuning(tuning);
+    if (!pairs.some(p=>p.key===G.focusPair)) state.game.focusPair = pairs[0]?.key || 'E&A';
+    const cdMs = G.lastHintAt ? Math.max(0, 10000 - (Date.now()-G.lastHintAt)) : 0;
+    const cdSec = Math.ceil(cdMs/1000);
+    const focusSelect = () => `
+      <label for='sel-focus' class='text-sm text-gray-300 ml-2'>Focus strings</label>
+      <select id='sel-focus' class='rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'>
+        ${pairs.map(p=>`<option value='${p.key}' ${p.key===G.focusPair?'selected':''}>${p.label}</option>`).join('')}
+      </select>`;
+
+    // String options for Game, now with Pro limitations
+    const stringOptionsGame = ['4','5','6'].map(x => {
+      const disabled = !state.isPro && x !== '4';
+      return `<option ${x===state.musical.strings?'selected':''} value="${x}" ${disabled ? 'disabled' : ''}>${x}-string ${disabled ? '(Pro)' : ''}</option>`;
+    }).join('');
+
+    // Left-handed Mode Toggle for Game controls
+    const leftHandedToggleHtml = `
+      <div class="flex items-center justify-between mt-4 md:mt-0 md:ml-4 w-full md:w-auto">
+        <label for="toggle-left-handed-game" class="block text-sm text-gray-200">Left-handed</label>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" id="toggle-left-handed-game" class="sr-only peer" ${state.isLeftHanded ? 'checked' : ''}>
+          <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-sky-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-600"></div>
+        </label>
+      </div>`;
+
+    if (!G.on && !G.over){
+      content = `<div class='space-y-4'>
+        <div class='pane p-4 flex flex-wrap items-center justify-between gap-3'>
+          <div class='flex flex-wrap items-center gap-2'>
+            <label for='sel-strings-game' class='text-sm text-gray-300'>Strings</label>
+            <select id='sel-strings-game' class='rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'>
+              ${stringOptionsGame}
+            </select>
+            <label for='sel-diff' class='text-sm text-gray-300 ml-2'>Difficulty</label>
+            <select id='sel-diff' class='rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'>
+              <option value='easy' ${G.difficulty==='easy'?'selected':''}>Easy (0–5)</option>
+              <option value='standard' ${G.difficulty==='standard'?'selected':''}>Standard (0–12)</option>
+              <option value='focus' ${G.difficulty==='focus'?'selected':''} ${!state.isPro ? 'disabled' : ''}>Focus ${!state.isPro ? '(Pro)' : ''}</option>
+            </select>
+            ${G.difficulty==='focus' && state.isPro ? focusSelect():''}
+          </div>
+          ${leftHandedToggleHtml}
+          <button id='btn-start' class='px-4 py-2 rounded-md font-bold bg-green-600 text-white hover:bg-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'>Start game</button>
+        </div>
+        <div class='pane p-8 text-center'>
+          <h2 class='text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500 mb-2'>Note Finder Challenge</h2>
+          <p class='text-gray-300'>Find every instance of the chosen note (0–12 frets). Build combo, keep accuracy high.</p>
+          <p class='text-gray-300 text-lg mt-4'>High Score: <strong class='text-yellow-400'>${state.game.highScore}</strong></p>
+        </div>
+      </div>`;
+    } else if (G.on){
+      // Pass isLeftHanded to drawFretboard
+      const svg = drawFretboard({ notes:[G.target], root:G.target, tuning, mode:'game', isLeftHanded });
+      const attempts = G.found.length + (G.misses||0);
+      const acc = attempts ? Math.round((G.found.length/attempts)*100) : 100;
+
+      // Hint button logic
+      const hintButtonDisabled = cdMs > 0 || (!state.isPro && G.hintsUsed >= 1);
+      const hintButtonClass = hintButtonDisabled ? 'bg-gray-700 text-gray-300' : 'bg-purple-600 text-white hover:bg-purple-700';
+      const hintButtonText = state.isPro ? 'Hint' : `Hint (${Math.max(0, 1 - G.hintsUsed)} left)`;
+      const hintButtonContent = cdMs > 0 ? `<span class="spinner"></span>Hint (${cdSec}s)` : hintButtonText;
+
+
+      content = `<div class='space-y-4'>
+        <div class='pane p-4 grid grid-cols-6 gap-2 text-center items-center sticky top-2 z-10'>
+          <div><p class='text-xs text-gray-400'>Find</p><p class='text-3xl md:text-4xl font-extrabold text-green-400'>${G.target}</p></div>
+          <div><p class='text-xs text-gray-400'>Found</p><p class='text-2xl font-extrabold'>${G.found.length}/${G.total}</p></div>
+          <div><p class='text-xs text-gray-400'>Combo</p><p class='text-2xl font-extrabold'>${G.combo||0}×</p></div>
+          <div><p class='text-xs text-gray-400'>Accuracy</p><p class='text-2xl font-extrabold'>${acc}%</p></div>
+          <div><p class='text-xs text-gray-400'>Time</p><p id='game-timer' class='text-2xl font-extrabold'>0s</p></div>
+          <div><p class='text-xs text-gray-400'>Difficulty</p><p class='text-lg font-bold'>${labelForDiff(G.difficulty)}</p></div>
+          <div class='col-span-6 mt-2 flex justify-center gap-1'>${progressBarHtml(G.total, G.found.length)}</div>
+          <div class='col-span-6 text-xl font-bold text-yellow-400'>Score: ${G.score}</div>
+        </div>
+        <div class='pane p-4 flex flex-wrap items-center justify-between gap-3'>
+          <div class='flex items-center gap-2'>
+            <label for='sel-strings-game' class='text-sm text-gray-300'>Strings</label>
+            <select id='sel-strings-game' class='rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'>
+              ${stringOptionsGame}
+            </select>
+            <label for='sel-diff' class='text-sm text-gray-300 ml-2'>Difficulty</label>
+            <select id='sel-diff' class='rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'>
+              <option value='easy' ${G.difficulty==='easy'?'selected':''}>Easy (0–5)</option>
+              <option value='standard' ${G.difficulty==='standard'?'selected':''}>Standard (0–12)</option>
+              <option value='focus' ${G.difficulty==='focus'?'selected':''} ${!state.isPro ? 'disabled' : ''}>Focus ${!state.isPro ? '(Pro)' : ''}</option>
+            </select>
+            ${G.difficulty==='focus' && state.isPro ? focusSelect():''}
+          </div>
+          <div class='flex items-center gap-2'>
+            <button id='btn-new' class='px-3 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'>New note</button>
+            <button id='btn-reset' class='px-3 py-2 rounded-md bg-gray-600 text-white hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'>Reset round</button>
+            <button id='btn-hint' ${hintButtonDisabled ? 'disabled' : ''} class='px-3 py-2 rounded-md ${hintButtonClass} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'>${hintButtonContent}</button>
+          </div>
+          ${leftHandedToggleHtml}
+        </div>
+        <div class='pane p-4'>${svg}</div>
+      </div>`;
+    } else {
+      const time=((G.t1-G.t0)/1000).toFixed(2);
+      const accuracy = G.total > 0 ? ((G.found.length / (G.found.length + G.misses)) * 100).toFixed(0) : 100;
+      content = `<div class='space-y-4'>
+        <div class='pane p-4 flex flex-wrap items-center justify-between gap-3'>
+          <div class='flex items-center gap-2'>
+            <label for='sel-strings-game' class='text-sm text-gray-300'>Strings</label>
+            <select id='sel-strings-game' class='rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'>
+              ${stringOptionsGame}
+            </select>
+            <label for='sel-diff' class='text-sm text-gray-300 ml-2'>Difficulty</label>
+            <select id='sel-diff' class='rounded-md bg-gray-800/70 border border-white/10 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'>
+              <option value='easy' ${G.difficulty==='easy'?'selected':''}>Easy (0–5)</option>
+              <option value='standard' ${G.difficulty==='standard'?'selected':''}>Standard (0–12)</option>
+              <option value='focus' ${G.difficulty==='focus'?'selected':''} ${!state.isPro ? 'disabled' : ''}>Focus ${!state.isPro ? '(Pro)' : ''}</option>
+            </select>
+            ${G.difficulty==='focus' && state.isPro ? focusSelect():''}
+          </div>
+          <div class='flex items-center gap-2'>
+            <button id='btn-start' class='px-4 py-2 rounded-md font-bold bg-green-600 text-white hover:bg-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900'>Play again</button>
+          </div>
+          ${leftHandedToggleHtml}
+        </div>
+        <div class='pane p-8 text-center'>
+          <h2 class='text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500 mb-2'>Challenge Complete!</h2>
+          <p class='text-gray-300 text-lg mb-2'>You found all <strong>${G.target}</strong> notes in <strong>${time}</strong> seconds.</p>
+          <p class='text-gray-300 text-lg mb-2'>Accuracy: <strong class='text-sky-400'>${accuracy}%</strong></p>
+          <p class='3xl font-bold text-yellow-400 mb-4'>Your Score: ${Math.round(G.score)}</p>
+          ${G.score === state.game.highScore && G.score > 0 ? `<p class='text-green-400 font-bold text-xl'>NEW HIGH SCORE!</p>` : `<p class='text-gray-300 text-lg'>High Score: <strong class='text-yellow-400'>${state.game.highScore}</strong></p>`}
+        </div>
+      </div>`;
+    }
+    app.innerHTML = content;
+    const sel = document.getElementById('sel-strings-game'); if (sel) sel.onchange = e => { state.musical.strings=e.target.value; if (state.game.difficulty==='focus') ensureFocusPairValid(); if (state.game.on) startGame(); else render(); };
+    const selDiff = document.getElementById('sel-diff');  if (selDiff) { selDiff.onchange = e => {  state.game.difficulty = e.target.value;  if (state.game.difficulty === 'focus' && !state.isPro) { state.game.difficulty = 'standard'; } if (state.game.difficulty==='focus') ensureFocusPairValid();  if (state.game.on) restartRound();  else render();  }; }
+    const selFocus = document.getElementById('sel-focus'); if (selFocus) selFocus.onchange = e => { state.game.focusPair = e.target.value; if (state.game.on) restartRound(); else render(); };
+    const start = document.getElementById('btn-start'); if (start) start.onclick = startGame;
+    const btnNew = document.getElementById('btn-new'); if (btnNew) btnNew.onclick = () => startGame();
+    const btnReset = document.getElementById('btn-reset'); if (btnReset) btnReset.onclick = restartRound;
+    const btnHint = document.getElementById('btn-hint');
+    if (btnHint) {
+      btnHint.onclick = hintOne;
+      // Update hint button state initially
+      const cdMs = state.game.lastHintAt ? Math.max(0, 10000 - (Date.now()-state.game.lastHintAt)) : 0;
+      const hintButtonDisabledInitial = cdMs > 0 || (!state.isPro && state.game.hintsUsed >= 1);
+      btnHint.disabled = hintButtonDisabledInitial;
+      if (cdMs > 0) {
+        btnHint.innerHTML = `<span class="spinner"></span>Hint (${Math.ceil(cdMs/1000)}s)`;
+        btnHint.classList.add('bg-gray-700','text-gray-300');
+        btnHint.classList.remove('bg-purple-600','hover:bg-purple-700','text-white');
+      } else {
+        btnHint.textContent = state.isPro ? 'Hint' : `Hint (${Math.max(0, 1 - state.game.hintsUsed)} left)`;
+        if (hintButtonDisabledInitial) {
+            btnHint.classList.add('bg-gray-700','text-gray-300');
+            btnHint.classList.remove('bg-purple-600','text-white');
+        } else {
+            btnHint.classList.remove('bg-gray-700','text-gray-300');
+            btnHint.classList.add('bg-purple-600','text-white');
+        }
+      }
+    }
+
+
+    // Left-handed Mode Toggle for Game controls
+    const leftHandedToggleGame = document.getElementById('toggle-left-handed-game');
+    if (leftHandedToggleGame) {
+      leftHandedToggleGame.onchange = (e) => {
+        state.isLeftHanded = e.target.checked;
+        localStorage.setItem('bassTrainerLeftHanded', state.isLeftHanded);
+        if (state.game.on) restartRound(); // If game is on, restart to apply new layout
+        else render(); // Otherwise, just re-render the screen
+      };
+    }
+
+    if (state.game.on){
+      document.getElementById('fret-svg').addEventListener('click', onGameClick);
+      if (state.game.timer) clearInterval(state.game.timer);
+      state.game.timer = setInterval(()=>{
+        const tEl=document.getElementById('game-timer');
+        if (tEl) tEl.textContent = Math.floor((Date.now()-state.game.t0)/1000) + 's';
+        const hb=document.getElementById('btn-hint');
+        if (hb){
+          const cdMs = state.game.lastHintAt ? Math.max(0, 10000 - (Date.now()-state.game.lastHintAt)) : 0;
+          const hintDisabled = cdMs > 0 || (!state.isPro && state.game.hintsUsed >= 1);
+          hb.disabled = hintDisabled;
+          if (cdMs > 0){
+            hb.innerHTML = `<span class="spinner"></span>Hint (${Math.ceil(cdMs/1000)}s)`;
+            hb.classList.add('bg-gray-700','text-gray-300');
+            hb.classList.remove('bg-purple-600','hover:bg-purple-700','text-white');
+          } else {
+            hb.textContent = state.isPro ? 'Hint' : `Hint (${Math.max(0, 1 - state.game.hintsUsed)} left)`;
+            if (hintDisabled) {
+                hb.classList.add('bg-gray-700','text-gray-300');
+                hb.classList.remove('bg-purple-600','text-white');
+            } else {
+                hb.classList.remove('bg-gray-700','text-gray-300');
+                hb.classList.add('bg-purple-600','text-white');
+            }
+          }
+        }
+      }, 500);
+      if (state.game.justFound){ const chip = document.querySelector(`.bar.fg[data-idx="${state.game.justFound-1}"]`); if (chip){ chip.classList.add('bar-pulse'); setTimeout(()=>chip.classList.remove('bar-pulse'), 240); } state.game.justFound = 0; }
+    }
+  }
+  function labelForDiff(d){
+    // 'Standard' difficulty is now 0-12 for all users.
+    if (d === 'focus' && !state.isPro) return 'Standard 0-12'; // Should be disabled and show Pro, but fallback
+    return d==='easy' ? 'Easy 0–5' : d==='focus' ? ('Focus ' + (state.game.focusPair||'E&A').replace('&',' & ')) : 'Standard 0–12';
+  }
+  function computeTotalForTarget(target){
+    const tuning=getTuning(state.musical.strings);
+    let total=0;
+    tuning.forEach(open=>{
+      for(let f=0; f<=12; f++){
+        // Apply gameRulesAllow for correct total count based on active difficulty and Pro status
+        if (!gameRulesAllow(open,f)) continue;
+        if (chromSharp[idxFromOpen(open,f)]===target) total++;
+      }
+    });
+    return total;
+  }
+  function startGame(){ const notes = chromSharp; const target = notes[Math.floor(Math.random()*notes.length)]; const total = computeTotalForTarget(target); Object.assign(state.game,{ on:true, over:false, target, found:[], total, t0:Date.now(), t1:null, combo:0, misses:0, msg:'', lastHintAt:null, justFound:0, hintsUsed:0, score:0 }); if (state.game.timer) clearInterval(state.game.timer); render(); }
+  function restartRound(){ if (!state.game.target){ startGame(); return; } const t = state.game.target; const total = computeTotalForTarget(t); Object.assign(state.game,{ on:true, over:false, target:t, found:[], total, t0:Date.now(), t1:null, combo:0, misses:0, msg:'', lastHintAt:null, justFound:0, hintsUsed:0, score:0 }); if (state.game.timer) clearInterval(state.game.timer); render(); }
+  function hintOne(){ const now = Date.now(); if (!state.isPro && state.game.hintsUsed >= 1) return; if (state.game.lastHintAt && (now - state.game.lastHintAt) < 10000) return; const nodes = Array.from(document.querySelectorAll(`.gn[data-note="${state.game.target}"]`)); const hidden = nodes.filter(n => !state.game.found.includes(n.getAttribute('data-id'))); if (!hidden.length) return; const pick = hidden[Math.floor(Math.random()*hidden.length)]; const circle = pick.querySelector('circle'); if (circle){ circle.classList.add('n-hint'); setTimeout(()=>circle.classList.remove('n-hint'), 1100); } state.game.lastHintAt = now; if (!state.isPro) { state.game.hintsUsed++; } render(); }
+  function onGameClick(e){ const g = e.target.closest('.gn'); if (!g) return; const note = g.getAttribute('data-note'); const id = g.getAttribute('data-id'); const c = g.querySelector('circle'); if (state.game.found.includes(id) || !gameRulesAllow(getTuning(state.musical.strings).slice().reverse()[parseInt(id.split('-')[0])], parseInt(id.split('-')[1]))) return; if (note===state.game.target){ state.game.found.push(id); state.game.combo++; state.game.score += 100 + (state.game.combo * 10); state.game.justFound = state.game.found.length; if (c){ c.classList.add('hit-pulse'); c.classList.remove('n-hide'); c.classList.add('n-ok'); setTimeout(()=>c.classList.remove('hit-pulse'),180);} if (state.game.found.length===state.game.total){ endGame(); return; } } else { state.game.combo=0; state.game.misses++; state.game.score = Math.max(0, state.game.score - 50); if (c){ c.classList.add('miss-shake'); c.classList.remove('n-hide'); c.classList.add('n-bad'); setTimeout(()=>{ if (!state.game.found.includes(id)){ c.classList.remove('n-bad'); c.classList.add('n-hide'); } c.classList.remove('miss-shake'); },220);} } render(); }
+  function endGame(){ state.game.on=false; state.game.over=true; state.game.t1=Date.now(); const timeTakenSeconds = (state.game.t1 - state.game.t0) / 1000; const timeBonus = Math.max(0, 1000 - (timeTakenSeconds * 10)); state.game.score = Math.max(0, state.game.score + timeBonus); if (state.game.score > state.game.highScore) { state.game.highScore = state.game.score; localStorage.setItem('bassTrainerHighScore', state.game.highScore); } burstConfetti(); render(); }
   function progressBarHtml(total, found){ let html=''; for(let i=0;i<total;i++){ html += `<span class="bar ${i<found?'fg':'bg'} w-5" data-idx="${i}"></span>`; } return html; }
   function burstConfetti(){ const colors=['#22D3EE','#A78BFA','#34D399','#F59E0B','#F472B6']; for(let i=0;i<28;i++){ const el=document.createElement('span'); el.className='confetti-piece'; el.style.left = Math.random()*100 + 'vw'; el.style.background = colors[Math.floor(Math.random()*colors.length)]; el.style.animationDuration = (1 + Math.random()*0.8)+'s'; el.style.transform = `translateY(-20px) rotate(${Math.random()*360}deg)`; document.body.appendChild(el); setTimeout(()=>el.remove(), 1800);} }
 
@@ -157,7 +781,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
         const data = await response.json();
 
-        if (data.success) {
+        if (response.ok && data.success) {
           // Backend confirmed payment! Now we grant access.
           console.log('Purchase verified successfully!');
           state.isPro = true;
@@ -167,12 +791,15 @@ window.addEventListener('DOMContentLoaded', () => {
           state.view = 'lessons';
 
         } else {
-           // Backend said the session was invalid or not paid
-           console.error('Purchase verification failed:', data.error);
+            // Backend said the session was invalid or not paid
+            console.error('Purchase verification failed:', data.error);
+            // Optionally, show a message to the user that verification failed
+            // For now, it will just remain on the current page or default to fret.
         }
 
       } catch (error) {
         console.error('Error verifying purchase:', error);
+        // Optionally, show a network error message
       } finally {
         // Clean the URL to remove the session_id parameter, regardless of outcome.
         window.history.replaceState({}, document.title, window.location.pathname);
