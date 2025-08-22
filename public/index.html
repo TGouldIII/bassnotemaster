@@ -71,14 +71,15 @@ window.addEventListener('DOMContentLoaded', async () => {
   // This is crucial for the frontend to correctly address your deployed backend.
   // Example: const BASE_API_URL = "https://your-backend-app.onrender.com";
   // You MUST replace "YOUR_RENDER_BACKEND_URL_HERE" with the actual URL of your deployed Render backend.
+  // If you are running this in a local Canvas environment, and your backend is also local,
+  // you might use "http://localhost:3000" (or whatever port your backend runs on).
   const BASE_API_URL = "YOUR_RENDER_BACKEND_URL_HERE"; // <--- IMPORTANT: CONFIGURE THIS
 
   // Helper to construct URLs for backend calls
   function getBackendUrl(path) {
     if (!BASE_API_URL || BASE_API_URL === "YOUR_RENDER_BACKEND_URL_HERE") {
       console.error("BASE_API_URL is not configured. Please set it to your deployed Render backend URL.");
-      // Fallback to relative path, though this is likely to cause issues if not on same origin
-      return path; 
+      return path; // Fallback to relative path, which will likely fail
     }
     return `${BASE_API_URL}${path}`;
   }
@@ -115,6 +116,15 @@ window.addEventListener('DOMContentLoaded', async () => {
     console.log("Current window.location.origin:", window.location.origin);
     const requestUrl = getBackendUrl('/user-status');
     console.log("Attempting to fetch Pro status from:", requestUrl);
+
+    // If BASE_API_URL is not configured, getBackendUrl will return a relative path
+    // and log an error. If it's still "YOUR_RENDER_BACKEND_URL_HERE", the fetch will fail.
+    if (requestUrl === '/user-status' && BASE_API_URL === "YOUR_RENDER_BACKEND_URL_HERE") {
+        state.isProStatusLoaded = true; // Mark as loaded to stop spinner, but without Pro access
+        renderApp();
+        return; // Exit early if URL is not configured
+    }
+
 
     try {
       // Pass user ID in headers for backend to identify the user
